@@ -86,6 +86,14 @@ export class OrdersService {
     });
   }
 
+  async getInventoryItems(): Promise<OrderItem[]> {
+    return this.orderItemsRepository.find({
+      where: { confirmedByStoreKeeper: true },
+      relations: { order: { storeKeeper: true } },
+      order: { updatedAt: 'DESC' },
+    });
+  }
+
   async findOne(id: string): Promise<Order> {
     const order = await this.ordersRepository.findOne({
       where: { id },

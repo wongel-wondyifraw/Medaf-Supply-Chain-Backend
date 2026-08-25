@@ -17,7 +17,7 @@ import { OrdersService } from './orders.service.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
 import { CreateOrderItemDto } from './dto/create-order-item.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
-import { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface.js';
+import type { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface.js';
 
 @Controller('api/orders')
 @UseGuards(JwtAuthGuard)
@@ -32,6 +32,11 @@ export class OrdersController {
   @Get()
   findAll(@Query('search') search?: string, @Query('status') status?: string) {
     return this.ordersService.findAll(search, status);
+  }
+
+  @Get('inventory/items')
+  getInventory() {
+    return this.ordersService.getInventoryItems();
   }
 
   @Get(':id')

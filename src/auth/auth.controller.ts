@@ -9,7 +9,7 @@ import {
 import { AuthService } from './auth.service.js';
 import { LoginDto } from './dto/login.dto.js';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
-import { AuthenticatedRequest } from './interfaces/authenticated-request.interface.js';
+import type { AuthenticatedRequest } from './interfaces/authenticated-request.interface.js';
 
 @Controller('api/auth')
 export class AuthController {
