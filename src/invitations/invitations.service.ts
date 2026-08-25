@@ -23,7 +23,10 @@ export class InvitationsService {
     private readonly configService: ConfigService,
   ) {}
 
-  async create(createInvitationDto: CreateInvitationDto, createdByUserId: string) {
+  async create(
+    createInvitationDto: CreateInvitationDto,
+    createdByUserId: string,
+  ) {
     const token = randomBytes(32).toString('hex');
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiry
@@ -36,9 +39,12 @@ export class InvitationsService {
     });
 
     await this.invitationsRepository.save(invitation);
-    
+
     // Construct the link using environment variable
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
+    const frontendUrl = this.configService.get<string>(
+      'FRONTEND_URL',
+      'http://localhost:3000',
+    );
     return {
       token,
       link: `${frontendUrl}/invite/${token}`,
@@ -50,7 +56,9 @@ export class InvitationsService {
   }
 
   async validate(token: string) {
-    const invitation = await this.invitationsRepository.findOne({ where: { token } });
+    const invitation = await this.invitationsRepository.findOne({
+      where: { token },
+    });
     if (!invitation) {
       throw new NotFoundException('Invitation not found');
     }
@@ -72,8 +80,10 @@ export class InvitationsService {
 
   async register(token: string, registerDto: RegisterViaInviteDto) {
     const validationResult = await this.validate(token);
-    const invitation = await this.invitationsRepository.findOne({ where: { token } });
-    
+    const invitation = await this.invitationsRepository.findOne({
+      where: { token },
+    });
+
     if (!invitation) throw new NotFoundException('Invitation not found');
 
     const user = await this.usersService.create({
@@ -94,12 +104,16 @@ export class InvitationsService {
   }
 
   async revoke(id: string) {
-    const invitation = await this.invitationsRepository.findOne({ where: { id } });
+    const invitation = await this.invitationsRepository.findOne({
+      where: { id },
+    });
     if (!invitation) {
       throw new NotFoundException('Invitation not found');
     }
     if (invitation.status !== 'pending') {
-      throw new BadRequestException('Cannot revoke an invitation that is not pending');
+      throw new BadRequestException(
+        'Cannot revoke an invitation that is not pending',
+      );
     }
     invitation.status = 'revoked';
     await this.invitationsRepository.save(invitation);

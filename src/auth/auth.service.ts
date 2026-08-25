@@ -17,7 +17,9 @@ export class AuthService {
     }
 
     if (user.status !== 'Active') {
-      throw new UnauthorizedException('Account is inactive. Contact your administrator.');
+      throw new UnauthorizedException(
+        'Account is inactive. Contact your administrator.',
+      );
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);

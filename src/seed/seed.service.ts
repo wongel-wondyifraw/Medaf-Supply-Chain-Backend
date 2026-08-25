@@ -18,9 +18,24 @@ export class SeedService implements OnModuleInit {
 
   private async seedRoles() {
     const defaultRoles = [
-      { name: 'Admin', description: 'Full system access and management capabilities' },
-      { name: 'Manager', description: 'Manage inventory, orders, and view users' },
+      {
+        name: 'Admin',
+        description: 'Full system access and management capabilities',
+      },
+      {
+        name: 'Manager',
+        description: 'Manage inventory, orders, and view users',
+      },
       { name: 'Viewer', description: 'Read-only access to the system' },
+      { name: 'Merchant', description: 'Manage sales and customer orders' },
+      {
+        name: 'Receiver',
+        description: 'Handle incoming shipments and goods receipts',
+      },
+      {
+        name: 'Store Keeper',
+        description: 'Manage physical inventory and warehouse operations',
+      },
     ];
 
     for (const role of defaultRoles) {

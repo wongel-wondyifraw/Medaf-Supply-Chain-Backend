@@ -8,6 +8,7 @@ import { RolesModule } from './roles/roles.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { InvitationsModule } from './invitations/invitations.module.js';
 import { SeedModule } from './seed/seed.module.js';
+import { OrdersModule } from './orders/orders.module.js';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { SeedModule } from './seed/seed.module.js';
     AuthModule,
     InvitationsModule,
     SeedModule,
+    OrdersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

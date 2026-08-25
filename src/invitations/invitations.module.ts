@@ -7,11 +7,7 @@ import { UsersModule } from '../users/users.module.js';
 import { AuthModule } from '../auth/auth.module.js';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Invitation]),
-    UsersModule,
-    AuthModule,
-  ],
+  imports: [TypeOrmModule.forFeature([Invitation]), UsersModule, AuthModule],
   controllers: [InvitationsController],
   providers: [InvitationsService],
   exports: [InvitationsService],

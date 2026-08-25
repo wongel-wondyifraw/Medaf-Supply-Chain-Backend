@@ -12,6 +12,7 @@ import { InvitationsService } from './invitations.service.js';
 import { CreateInvitationDto } from './dto/create-invitation.dto.js';
 import { RegisterViaInviteDto } from './dto/register-via-invite.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
+import { AuthenticatedRequest } from '../auth/interfaces/authenticated-request.interface.js';
 
 @Controller('api/invitations')
 export class InvitationsController {
@@ -19,7 +20,7 @@ export class InvitationsController {
 
   @UseGuards(JwtAuthGuard)
   @Post()
-  create(@Body() createInvitationDto: CreateInvitationDto, @Request() req) {
+  create(@Body() createInvitationDto: CreateInvitationDto, @Request() req: AuthenticatedRequest) {
     return this.invitationsService.create(createInvitationDto, req.user.id);
   }
 
