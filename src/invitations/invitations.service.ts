@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { randomBytes } from 'crypto';
@@ -19,6 +20,7 @@ export class InvitationsService {
     private readonly invitationsRepository: Repository<Invitation>,
     private readonly usersService: UsersService,
     private readonly authService: AuthService,
+    private readonly configService: ConfigService,
   ) {}
 
   async create(createInvitationDto: CreateInvitationDto, createdByUserId: string) {
@@ -35,9 +37,8 @@ export class InvitationsService {
 
     await this.invitationsRepository.save(invitation);
     
-    // Construct the link. We assume the frontend is hosted on the same origin typically or via env var.
-    // In dev, frontend is on port 3000.
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    // Construct the link using environment variable
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
     return {
       token,
       link: `${frontendUrl}/invite/${token}`,
