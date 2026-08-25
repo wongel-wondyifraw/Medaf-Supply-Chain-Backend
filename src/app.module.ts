@@ -6,6 +6,7 @@ import { AppService } from './app.service.js';
 import { UsersModule } from './users/users.module.js';
 import { RolesModule } from './roles/roles.module.js';
 import { AuthModule } from './auth/auth.module.js';
+import { InvitationsModule } from './invitations/invitations.module.js';
 import { SeedModule } from './seed/seed.module.js';
 
 @Module({
@@ -28,6 +29,7 @@ import { SeedModule } from './seed/seed.module.js';
     UsersModule,
     RolesModule,
     AuthModule,
+    InvitationsModule,
     SeedModule,
   ],
   controllers: [AppController],
