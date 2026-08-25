@@ -20,7 +20,10 @@ export class InvitationsController {
 
   @UseGuards(JwtAuthGuard)
   @Post()
-  create(@Body() createInvitationDto: CreateInvitationDto, @Request() req: AuthenticatedRequest) {
+  create(
+    @Body() createInvitationDto: CreateInvitationDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
     return this.invitationsService.create(createInvitationDto, req.user.id);
   }
 

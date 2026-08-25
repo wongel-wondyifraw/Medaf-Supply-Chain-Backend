@@ -126,7 +126,9 @@ export class OrdersService {
 
     let imageUrl = createOrderItemDto.imageUrl;
     if (file) {
-      const uploadResult = await this.cloudinaryService.uploadImage(file) as { secure_url: string };
+      const uploadResult = (await this.cloudinaryService.uploadImage(file)) as {
+        secure_url: string;
+      };
       imageUrl = uploadResult.secure_url;
     }
 
@@ -209,7 +211,7 @@ export class OrdersService {
     return this.orderItemsRepository.save(item);
   }
 
-  async closeOrder(orderId: string, _userId: string): Promise<OrderItem[]> {
+  async closeOrder(orderId: string): Promise<OrderItem[]> {
     const order = await this.findOne(orderId);
 
     if (order.status === 'closed') {

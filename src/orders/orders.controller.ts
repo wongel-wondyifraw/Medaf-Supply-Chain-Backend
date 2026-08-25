@@ -25,7 +25,10 @@ export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   @Post()
-  create(@Body() createOrderDto: CreateOrderDto, @Request() req: AuthenticatedRequest) {
+  create(
+    @Body() createOrderDto: CreateOrderDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
     return this.ordersService.create(createOrderDto, req.user.id);
   }
 
@@ -74,8 +77,8 @@ export class OrdersController {
   }
 
   @Patch(':id/close')
-  closeOrder(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
-    return this.ordersService.closeOrder(id, req.user.id);
+  closeOrder(@Param('id') id: string) {
+    return this.ordersService.closeOrder(id);
   }
 
   @Delete(':id')

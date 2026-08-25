@@ -19,7 +19,8 @@ export class CloudinaryService {
         { folder: 'medaf_supply_chain' },
         (error, result) => {
           if (error) {
-            return reject(error instanceof Error ? error : new Error(error.message || 'Cloudinary upload failed'));
+            reject(new Error(error.message || 'Cloudinary upload failed'));
+            return;
           }
           resolve(result);
         },
