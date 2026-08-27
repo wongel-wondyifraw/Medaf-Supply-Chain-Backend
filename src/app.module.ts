@@ -15,16 +15,28 @@ import { OrdersModule } from './orders/orders.module.js';
     ConfigModule.forRoot({ isGlobal: true }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        type: 'postgres' as const,
-        host: configService.get<string>('DB_HOST', 'localhost'),
-        port: configService.get<number>('DB_PORT', 5432),
-        username: configService.get<string>('DB_USERNAME', 'ww'),
-        password: configService.get<string>('DB_PASSWORD', ''),
-        database: configService.get<string>('DB_NAME', 'medaf_supply_chain'),
-        autoLoadEntities: true,
-        synchronize: true, // Auto-create tables (dev only)
-      }),
+      useFactory: (configService: ConfigService) => {
+        const isLocal = configService.get<string>('LOCAL') === 'true';
+
+        return {
+          type: 'postgres' as const,
+          ...(isLocal
+            ? {
+                host: configService.get<string>('DB_HOST', 'localhost'),
+                port: configService.get<number>('DB_PORT', 5432),
+                username: configService.get<string>('DB_USERNAME', 'postgres'),
+                password: configService.get<string>('DB_PASSWORD', ''),
+                database: configService.get<string>('DB_NAME', 'medaf_supply_chain'),
+                ssl: false,
+              }
+            : {
+                url: configService.get<string>('DATABASE_URL'),
+                ssl: { rejectUnauthorized: false },
+              }),
+          autoLoadEntities: true,
+          synchronize: true, // Auto-create tables (dev only)
+        };
+      },
       inject: [ConfigService],
     }),
     UsersModule,

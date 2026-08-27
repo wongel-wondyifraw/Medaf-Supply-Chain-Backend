@@ -1,13 +1,20 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  const configService = app.get(ConfigService);
+
+  const isLocal = configService.get<string>('LOCAL') === 'true';
+  const frontendUrl = isLocal
+    ? configService.get<string>('FRONTEND_URL_LOCAL')
+    : configService.get<string>('FRONTEND_URL_PRODUCTION');
 
   // Enable CORS for frontend
   app.enableCors({
-    origin: ['http://localhost:3000'],
+    origin: [frontendUrl || 'http://localhost:3000'],
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     credentials: true,
   });
