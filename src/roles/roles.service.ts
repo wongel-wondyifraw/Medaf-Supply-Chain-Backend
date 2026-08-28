@@ -21,7 +21,11 @@ export class RolesService {
     private readonly rolesRepository: Repository<Role>,
   ) {}
 
-  getPermissionsCatalog(): Array<{ key: string; label: string; group: string }> {
+  getPermissionsCatalog(): Array<{
+    key: string;
+    label: string;
+    group: string;
+  }> {
     const catalogPath = path.join(
       process.cwd(),
       'src',
