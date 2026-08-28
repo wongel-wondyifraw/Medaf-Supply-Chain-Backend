@@ -9,6 +9,7 @@ import { Order } from './entities/order.entity.js';
 import { OrderItem } from './entities/order-item.entity.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
 import { CreateOrderItemDto } from './dto/create-order-item.dto.js';
+import { ConfirmItemDto } from './dto/confirm-item.dto.js';
 import { UsersService } from '../users/users.service.js';
 import { CloudinaryService } from '../cloudinary/cloudinary.service.js';
 
@@ -63,7 +64,12 @@ export class OrdersService {
     return this.ordersRepository.save(order);
   }
 
-  async findAll(search?: string, status?: string): Promise<Order[]> {
+  async findAll(
+    search?: string,
+    status?: string,
+    userId?: string,
+    userRole?: string,
+  ): Promise<Order[]> {
     const where: FindOptionsWhere<Order> = {};
 
     if (search) {
@@ -71,6 +77,14 @@ export class OrdersService {
     }
     if (status) {
       where.status = status;
+    }
+
+    if (userRole === 'Merchant') {
+      where.merchantId = userId;
+    } else if (userRole === 'Receiver') {
+      where.receiverId = userId;
+    } else if (userRole === 'Store Keeper') {
+      where.storeKeeperId = userId;
     }
 
     return this.ordersRepository.find({
@@ -92,6 +106,66 @@ export class OrdersService {
       relations: { order: { storeKeeper: true } },
       order: { updatedAt: 'DESC' },
     });
+  }
+
+  async getDashboardStats() {
+    const allOrdersCount = await this.ordersRepository.count();
+    
+    const pendingOrdersCount = await this.ordersRepository.count({
+      where: { status: 'pending' },
+    });
+
+    const confirmedOrdersCount = await this.ordersRepository.count({
+      where: [{ status: 'in_progress' }, { status: 'closed' }],
+    });
+
+    const inventoryItemsCount = await this.orderItemsRepository.count({
+      where: { confirmedByStoreKeeper: true },
+    });
+
+    const recentOrders = await this.ordersRepository.find({
+      relations: {
+        merchant: true,
+        receiver: true,
+        storeKeeper: true,
+        creator: true,
+        items: true,
+      },
+      order: { createdAt: 'DESC' },
+      take: 5,
+    });
+
+    return {
+      stats: {
+        allOrders: allOrdersCount,
+        pendingOrders: pendingOrdersCount,
+        confirmedOrders: confirmedOrdersCount,
+        inventoryItems: inventoryItemsCount,
+      },
+      recentOrders,
+    };
+  }
+
+  async getMyApprovals(userId: string, userRole: string): Promise<OrderItem[]> {
+    const query = this.orderItemsRepository
+      .createQueryBuilder('item')
+      .leftJoinAndSelect('item.order', 'order');
+
+    if (userRole === 'Merchant') {
+      query.where('item.confirmedByMerchant = :confirmed', { confirmed: true })
+           .andWhere('order.merchantId = :userId', { userId });
+    } else if (userRole === 'Receiver') {
+      query.where('item.confirmedByReceiver = :confirmed', { confirmed: true })
+           .andWhere('order.receiverId = :userId', { userId });
+    } else if (userRole === 'Store Keeper') {
+      query.where('item.confirmedByStoreKeeper = :confirmed', { confirmed: true })
+           .andWhere('order.storeKeeperId = :userId', { userId });
+    } else {
+      return [];
+    }
+
+    query.orderBy('item.updatedAt', 'DESC');
+    return query.getMany();
   }
 
   async findOne(id: string): Promise<Order> {
@@ -163,6 +237,7 @@ export class OrdersService {
   async confirmItem(
     orderId: string,
     itemId: string,
+    confirmItemDto: ConfirmItemDto,
     userId: string,
     userRole: string,
   ): Promise<OrderItem> {
@@ -176,6 +251,10 @@ export class OrdersService {
     });
     if (!item) {
       throw new NotFoundException(`Item with ID "${itemId}" not found`);
+    }
+
+    if (confirmItemDto.receivedQuantity !== undefined) {
+      item.receivedQuantity = confirmItemDto.receivedQuantity;
     }
 
     // Role-based confirmation logic
@@ -244,12 +323,29 @@ export class OrdersService {
 
     const order = await this.findOne(orderId);
 
-    // TypeORM cascading delete doesn't always delete items if not set up,
-    // so let's delete items first explicitly.
     if (order.items && order.items.length > 0) {
-      await this.orderItemsRepository.remove(order.items);
+      // Only delete items that are not in the inventory (not fully confirmed)
+      const itemsToDelete = order.items.filter(
+        (item) => !item.confirmedByStoreKeeper,
+      );
+      if (itemsToDelete.length > 0) {
+        await this.orderItemsRepository.remove(itemsToDelete);
+      }
+      
+      // Items that are fully confirmed stay in the inventory.
+      // Detach them from the order so they aren't affected by the order deletion.
+      const itemsToKeep = order.items.filter(
+        (item) => item.confirmedByStoreKeeper,
+      );
+      if (itemsToKeep.length > 0) {
+        for (const item of itemsToKeep) {
+          item.orderId = null;
+        }
+        await this.orderItemsRepository.save(itemsToKeep);
+      }
     }
 
-    await this.ordersRepository.remove(order);
+    // Bypass TypeORM's in-memory cascade logic that might still delete preserved items
+    await this.ordersRepository.delete(order.id);
   }
 }

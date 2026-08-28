@@ -8,4 +8,8 @@ export class UpdateRoleDto {
   @IsString()
   @IsOptional()
   description?: string;
+
+  @IsString({ each: true })
+  @IsOptional()
+  permissions?: string[];
 }

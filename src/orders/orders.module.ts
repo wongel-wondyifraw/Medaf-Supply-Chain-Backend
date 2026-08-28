@@ -6,12 +6,14 @@ import { OrdersService } from './orders.service.js';
 import { OrdersController } from './orders.controller.js';
 import { UsersModule } from '../users/users.module.js';
 import { CloudinaryModule } from '../cloudinary/cloudinary.module.js';
+import { RolesModule } from '../roles/roles.module.js';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Order, OrderItem]),
     UsersModule,
     CloudinaryModule,
+    RolesModule,
   ],
   controllers: [OrdersController],
   providers: [OrdersService],

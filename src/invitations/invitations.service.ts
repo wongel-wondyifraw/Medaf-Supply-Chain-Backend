@@ -86,10 +86,16 @@ export class InvitationsService {
 
     if (!invitation) throw new NotFoundException('Invitation not found');
 
+    const identifier = registerDto.email || registerDto.phone;
+    if (!identifier) {
+      throw new BadRequestException('Either email or phone is required');
+    }
+
     const user = await this.usersService.create({
       firstName: registerDto.firstName,
       lastName: registerDto.lastName,
       email: registerDto.email,
+      phone: registerDto.phone,
       password: registerDto.password,
       role: validationResult.role,
       status: 'Active',
@@ -100,7 +106,7 @@ export class InvitationsService {
     invitation.usedAt = new Date();
     await this.invitationsRepository.save(invitation);
 
-    return this.authService.login(registerDto.email, registerDto.password);
+    return this.authService.login(identifier, registerDto.password);
   }
 
   async revoke(id: string) {

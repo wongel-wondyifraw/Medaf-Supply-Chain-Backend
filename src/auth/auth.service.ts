@@ -2,18 +2,20 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service.js';
+import { RolesService } from '../roles/roles.service.js';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
+    private readonly rolesService: RolesService,
   ) {}
 
-  async validateUser(email: string, password: string) {
-    const user = await this.usersService.findByEmail(email);
+  async validateUser(identifier: string, password: string) {
+    const user = await this.usersService.findByIdentifier(identifier);
     if (!user) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException('Invalid credentials');
     }
 
     if (user.status !== 'Active') {
@@ -24,7 +26,7 @@ export class AuthService {
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException('Invalid credentials');
     }
 
     // Update last login
@@ -35,17 +37,22 @@ export class AuthService {
     return result;
   }
 
-  async login(email: string, password: string) {
-    const user = await this.validateUser(email, password);
+  async login(identifier: string, password: string) {
+    const user = await this.validateUser(identifier, password);
+    
+    const roleObj = await this.rolesService.findByName(user.role);
+    const permissions = roleObj ? roleObj.permissions : [];
 
     const payload = {
       sub: user.id,
       email: user.email,
+      phone: user.phone,
       role: user.role,
+      permissions,
     };
 
     return {
-      user,
+      user: { ...user, permissions },
       token: this.jwtService.sign(payload),
     };
   }

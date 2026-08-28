@@ -14,12 +14,12 @@ export class OrderItem {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ name: 'order_id' })
-  orderId: string;
+  @Column({ name: 'order_id', nullable: true })
+  orderId: string | null;
 
-  @ManyToOne(() => Order, (order) => order.items, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Order, (order) => order.items, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'order_id' })
-  order: Order;
+  order: Order | null;
 
   @Column()
   name: string;
@@ -32,6 +32,9 @@ export class OrderItem {
 
   @Column({ type: 'int', default: 1 })
   quantity: number;
+
+  @Column({ name: 'received_quantity', type: 'int', nullable: true })
+  receivedQuantity: number;
 
   @Column({ default: 'merchant' })
   stage: string; // merchant, delivery (receiver), store_keeper

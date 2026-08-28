@@ -29,14 +29,15 @@ export class UsersService {
     return user;
   }
 
-  async findByEmail(email: string): Promise<User | null> {
+  async findByIdentifier(identifier: string): Promise<User | null> {
     return this.usersRepository.findOne({
-      where: { email },
+      where: [{ email: identifier }, { phone: identifier }],
       select: {
         id: true,
         firstName: true,
         lastName: true,
         email: true,
+        phone: true,
         password: true,
         role: true,
         status: true,
@@ -48,13 +49,30 @@ export class UsersService {
   }
 
   async create(createUserDto: CreateUserDto): Promise<User> {
-    const existing = await this.usersRepository.findOne({
-      where: { email: createUserDto.email },
-    });
-    if (existing) {
-      throw new ConflictException(
-        `User with email "${createUserDto.email}" already exists`,
-      );
+    if (!createUserDto.email && !createUserDto.phone) {
+      throw new ConflictException('Either email or phone must be provided');
+    }
+
+    if (createUserDto.email) {
+      const existingEmail = await this.usersRepository.findOne({
+        where: { email: createUserDto.email },
+      });
+      if (existingEmail) {
+        throw new ConflictException(
+          `User with email "${createUserDto.email}" already exists`,
+        );
+      }
+    }
+
+    if (createUserDto.phone) {
+      const existingPhone = await this.usersRepository.findOne({
+        where: { phone: createUserDto.phone },
+      });
+      if (existingPhone) {
+        throw new ConflictException(
+          `User with phone "${createUserDto.phone}" already exists`,
+        );
+      }
     }
 
     const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
@@ -78,6 +96,18 @@ export class UsersService {
       if (existing) {
         throw new ConflictException(
           `User with email "${updateUserDto.email}" already exists`,
+        );
+      }
+    }
+
+    const phoneUpdate = (updateUserDto as any).phone;
+    if (phoneUpdate && phoneUpdate !== user.phone) {
+      const existingPhone = await this.usersRepository.findOne({
+        where: { phone: phoneUpdate },
+      });
+      if (existingPhone) {
+        throw new ConflictException(
+          `User with phone "${phoneUpdate}" already exists`,
         );
       }
     }

@@ -1,0 +1,21 @@
+{
+  "permissions": [
+    { "key": "orders.view",          "label": "View Orders",            "group": "Orders" },
+    { "key": "orders.create",        "label": "Create Orders",          "group": "Orders" },
+    { "key": "orders.close",         "label": "Close Orders",           "group": "Orders" },
+    { "key": "orders.delete",        "label": "Delete Orders",          "group": "Orders" },
+    { "key": "orders.items.add",     "label": "Add Order Items",        "group": "Orders" },
+    { "key": "orders.items.remove",  "label": "Remove Order Items",     "group": "Orders" },
+    { "key": "orders.items.confirm", "label": "Confirm Order Items",    "group": "Orders" },
+    { "key": "orders.approvals.view","label": "View Own Approvals",     "group": "Orders" },
+    { "key": "inventory.view",       "label": "View Inventory",         "group": "Inventory" },
+    { "key": "users.view",           "label": "View Users",             "group": "Users" },
+    { "key": "users.create",         "label": "Create Users",           "group": "Users" },
+    { "key": "users.update",         "label": "Update Users",           "group": "Users" },
+    { "key": "users.delete",         "label": "Delete Users",           "group": "Users" },
+    { "key": "roles.view",           "label": "View Roles",             "group": "Roles" },
+    { "key": "roles.manage",         "label": "Manage Roles & Perms",   "group": "Roles" },
+    { "key": "dashboard.view",       "label": "View Dashboard Stats",   "group": "Dashboard" },
+    { "key": "invitations.manage",   "label": "Manage Invitations",     "group": "Users" }
+  ]
+}

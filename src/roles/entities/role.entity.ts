@@ -16,6 +16,9 @@ export class Role {
   @Column({ nullable: true, default: '' })
   description: string;
 
+  @Column({ type: 'simple-array', default: '' })
+  permissions: string[];
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }
