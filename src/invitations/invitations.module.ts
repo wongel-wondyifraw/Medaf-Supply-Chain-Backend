@@ -8,7 +8,12 @@ import { AuthModule } from '../auth/auth.module.js';
 import { RolesModule } from '../roles/roles.module.js';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Invitation]), UsersModule, AuthModule, RolesModule],
+  imports: [
+    TypeOrmModule.forFeature([Invitation]),
+    UsersModule,
+    AuthModule,
+    RolesModule,
+  ],
   controllers: [InvitationsController],
   providers: [InvitationsService],
   exports: [InvitationsService],

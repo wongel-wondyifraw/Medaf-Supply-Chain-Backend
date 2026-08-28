@@ -39,7 +39,7 @@ export class AuthService {
 
   async login(identifier: string, password: string) {
     const user = await this.validateUser(identifier, password);
-    
+
     const roleObj = await this.rolesService.findByName(user.role);
     const permissions = roleObj ? roleObj.permissions : [];
 

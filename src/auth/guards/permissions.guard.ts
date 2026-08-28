@@ -16,14 +16,14 @@ export class PermissionsGuard implements CanActivate {
       PERMISSIONS_KEY,
       [context.getHandler(), context.getClass()],
     );
-    
+
     if (!requiredPermissions || requiredPermissions.length === 0) {
       return true;
     }
 
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const user = request.user;
-    
+
     if (!user || !user.role) {
       return false;
     }
@@ -37,7 +37,7 @@ export class PermissionsGuard implements CanActivate {
       return requiredPermissions.every((permission) =>
         role.permissions.includes(permission),
       );
-    } catch (error) {
+    } catch {
       return false;
     }
   }

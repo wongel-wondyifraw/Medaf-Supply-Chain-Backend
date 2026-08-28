@@ -17,7 +17,10 @@ export class OrderItem {
   @Column({ name: 'order_id', nullable: true })
   orderId: string | null;
 
-  @ManyToOne(() => Order, (order) => order.items, { onDelete: 'SET NULL', nullable: true })
+  @ManyToOne(() => Order, (order) => order.items, {
+    onDelete: 'SET NULL',
+    nullable: true,
+  })
   @JoinColumn({ name: 'order_id' })
   order: Order | null;
 

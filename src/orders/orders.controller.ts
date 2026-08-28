@@ -43,7 +43,12 @@ export class OrdersController {
     @Query('search') search?: string,
     @Query('status') status?: string,
   ) {
-    return this.ordersService.findAll(search, status, req.user.id, req.user.role);
+    return this.ordersService.findAll(
+      search,
+      status,
+      req.user.id,
+      req.user.role,
+    );
   }
 
   @Get('inventory/items')

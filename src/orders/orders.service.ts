@@ -110,7 +110,7 @@ export class OrdersService {
 
   async getDashboardStats() {
     const allOrdersCount = await this.ordersRepository.count();
-    
+
     const pendingOrdersCount = await this.ordersRepository.count({
       where: { status: 'pending' },
     });
@@ -152,14 +152,17 @@ export class OrdersService {
       .leftJoinAndSelect('item.order', 'order');
 
     if (userRole === 'Merchant') {
-      query.where('item.confirmedByMerchant = :confirmed', { confirmed: true })
-           .andWhere('order.merchantId = :userId', { userId });
+      query
+        .where('item.confirmedByMerchant = :confirmed', { confirmed: true })
+        .andWhere('order.merchantId = :userId', { userId });
     } else if (userRole === 'Receiver') {
-      query.where('item.confirmedByReceiver = :confirmed', { confirmed: true })
-           .andWhere('order.receiverId = :userId', { userId });
+      query
+        .where('item.confirmedByReceiver = :confirmed', { confirmed: true })
+        .andWhere('order.receiverId = :userId', { userId });
     } else if (userRole === 'Store Keeper') {
-      query.where('item.confirmedByStoreKeeper = :confirmed', { confirmed: true })
-           .andWhere('order.storeKeeperId = :userId', { userId });
+      query
+        .where('item.confirmedByStoreKeeper = :confirmed', { confirmed: true })
+        .andWhere('order.storeKeeperId = :userId', { userId });
     } else {
       return [];
     }
@@ -331,7 +334,7 @@ export class OrdersService {
       if (itemsToDelete.length > 0) {
         await this.orderItemsRepository.remove(itemsToDelete);
       }
-      
+
       // Items that are fully confirmed stay in the inventory.
       // Detach them from the order so they aren't affected by the order deletion.
       const itemsToKeep = order.items.filter(

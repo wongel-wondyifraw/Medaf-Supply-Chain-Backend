@@ -21,10 +21,17 @@ export class RolesService {
     private readonly rolesRepository: Repository<Role>,
   ) {}
 
-  getPermissionsCatalog(): any {
-    const catalogPath = path.join(process.cwd(), 'src', 'permissions', 'permissions-catalog.json');
+  getPermissionsCatalog(): Array<{ key: string; label: string; group: string }> {
+    const catalogPath = path.join(
+      process.cwd(),
+      'src',
+      'permissions',
+      'permissions-catalog.json',
+    );
     try {
-      const catalogData = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
+      const catalogData = JSON.parse(fs.readFileSync(catalogPath, 'utf8')) as {
+        permissions: Array<{ key: string; label: string; group: string }>;
+      };
       return catalogData.permissions;
     } catch (e) {
       this.logger.error('Failed to load permissions catalog', e);

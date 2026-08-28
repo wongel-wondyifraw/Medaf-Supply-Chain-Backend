@@ -19,11 +19,18 @@ export class SeedService implements OnModuleInit {
   }
 
   private async seedRoles() {
-    const catalogPath = path.join(process.cwd(), 'src', 'permissions', 'permissions-catalog.json');
+    const catalogPath = path.join(
+      process.cwd(),
+      'src',
+      'permissions',
+      'permissions-catalog.json',
+    );
     let allPermissions: string[] = [];
     try {
-      const catalogData = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
-      allPermissions = catalogData.permissions.map((p: any) => p.key);
+      const catalogData = JSON.parse(fs.readFileSync(catalogPath, 'utf8')) as {
+        permissions: Array<{ key: string; label: string; group: string }>;
+      };
+      allPermissions = catalogData.permissions.map((p) => p.key);
     } catch (e) {
       this.logger.error('Failed to load permissions catalog', e);
     }
@@ -37,27 +44,42 @@ export class SeedService implements OnModuleInit {
       {
         name: 'Manager',
         description: 'Manage inventory, orders, and view users',
-        permissions: allPermissions.filter(p => !['users.delete', 'roles.manage'].includes(p)),
+        permissions: allPermissions.filter(
+          (p) => !['users.delete', 'roles.manage'].includes(p),
+        ),
       },
-      { 
-        name: 'Viewer', 
+      {
+        name: 'Viewer',
         description: 'Read-only access to the system',
-        permissions: allPermissions.filter(p => p.endsWith('.view')),
+        permissions: allPermissions.filter((p) => p.endsWith('.view')),
       },
-      { 
-        name: 'Merchant', 
+      {
+        name: 'Merchant',
         description: 'Manage sales and customer orders',
-        permissions: ['orders.view', 'orders.items.confirm', 'orders.approvals.view'],
+        permissions: [
+          'orders.view',
+          'orders.items.confirm',
+          'orders.approvals.view',
+        ],
       },
       {
         name: 'Receiver',
         description: 'Handle incoming shipments and goods receipts',
-        permissions: ['orders.view', 'orders.items.confirm', 'orders.approvals.view'],
+        permissions: [
+          'orders.view',
+          'orders.items.confirm',
+          'orders.approvals.view',
+        ],
       },
       {
         name: 'Store Keeper',
         description: 'Manage physical inventory and warehouse operations',
-        permissions: ['orders.view', 'orders.items.confirm', 'inventory.view', 'orders.approvals.view'],
+        permissions: [
+          'orders.view',
+          'orders.items.confirm',
+          'inventory.view',
+          'orders.approvals.view',
+        ],
       },
     ];
 
@@ -68,7 +90,9 @@ export class SeedService implements OnModuleInit {
         this.logger.log(`Seeded role: ${role.name}`);
       } else {
         // ALWAYS update permissions to ensure they stay in sync with the code
-        await this.rolesService.update(existing.id, { permissions: role.permissions });
+        await this.rolesService.update(existing.id, {
+          permissions: role.permissions,
+        });
         this.logger.log(`Updated permissions for role: ${role.name}`);
       }
     }

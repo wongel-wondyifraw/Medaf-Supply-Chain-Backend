@@ -26,7 +26,10 @@ import { OrdersModule } from './orders/orders.module.js';
                 port: configService.get<number>('DB_PORT', 5432),
                 username: configService.get<string>('DB_USERNAME', 'postgres'),
                 password: configService.get<string>('DB_PASSWORD', ''),
-                database: configService.get<string>('DB_NAME', 'medaf_supply_chain'),
+                database: configService.get<string>(
+                  'DB_NAME',
+                  'medaf_supply_chain',
+                ),
                 ssl: false,
               }
             : {

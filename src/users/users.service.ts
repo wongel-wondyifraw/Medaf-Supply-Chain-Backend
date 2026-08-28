@@ -100,7 +100,7 @@ export class UsersService {
       }
     }
 
-    const phoneUpdate = (updateUserDto as any).phone;
+    const phoneUpdate = (updateUserDto as { phone?: string }).phone;
     if (phoneUpdate && phoneUpdate !== user.phone) {
       const existingPhone = await this.usersRepository.findOne({
         where: { phone: phoneUpdate },

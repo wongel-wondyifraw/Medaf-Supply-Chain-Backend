@@ -28,7 +28,7 @@ export class RolesController {
 
   @Get('permissions')
   @RequirePermissions('roles.manage')
-  getPermissions() {
+  getPermissions(): Array<{ key: string; label: string; group: string }> {
     return this.rolesService.getPermissionsCatalog();
   }
 
