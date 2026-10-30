@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
 import * as path from 'path';
 import { UsersService } from '../users/users.service.js';
@@ -11,6 +12,7 @@ export class SeedService implements OnModuleInit {
   constructor(
     private readonly usersService: UsersService,
     private readonly rolesService: RolesService,
+    private readonly configService: ConfigService,
   ) {}
 
   async onModuleInit() {
@@ -99,21 +101,43 @@ export class SeedService implements OnModuleInit {
   }
 
   private async seedAdmin() {
-    const adminEmail = 'admin@medafsupplychain.com';
+    const adminEmail = this.configService.get<string>(
+      'ADMIN_EMAIL',
+      'admin@medafsupplychain.com',
+    );
+    const adminPassword = this.configService.get<string>(
+      'ADMIN_PASSWORD',
+      'Admin123!',
+    );
+    const adminFirstName = this.configService.get<string>(
+      'ADMIN_FIRST_NAME',
+      'System',
+    );
+    const adminLastName = this.configService.get<string>(
+      'ADMIN_LAST_NAME',
+      'Admin',
+    );
+
     const existing = await this.usersService.findByIdentifier(adminEmail);
 
     if (!existing) {
       await this.usersService.create({
-        firstName: 'System',
-        lastName: 'Admin',
+        firstName: adminFirstName,
+        lastName: adminLastName,
         email: adminEmail,
-        password: 'Admin123!',
+        password: adminPassword,
         role: 'Admin',
         status: 'Active',
       });
-      this.logger.log(`Seeded admin user: ${adminEmail}`);
+      this.logger.log(`Seeded admin user from env: ${adminEmail}`);
     } else {
-      this.logger.log(`Admin user already exists: ${adminEmail}`);
+      // Ensure existing user has Admin role and is active, and synchronize password from env
+      await this.usersService.update(existing.id, {
+        role: 'Admin',
+        status: 'Active',
+        ...(adminPassword ? { password: adminPassword } : {}),
+      });
+      this.logger.log(`Synchronized admin user from env: ${adminEmail}`);
     }
   }
 }

@@ -24,6 +24,10 @@ export class CreateUserDto {
   phone?: string;
 
   @IsString()
+  @IsOptional()
+  identifier?: string;
+
+  @IsString()
   @MinLength(6)
   password: string;
 

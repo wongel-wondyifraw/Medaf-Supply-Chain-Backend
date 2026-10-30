@@ -48,36 +48,72 @@ export class UsersService {
     });
   }
 
+  async findByIdWithPassword(id: string): Promise<User | null> {
+    return this.usersRepository.findOne({
+      where: { id },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phone: true,
+        password: true,
+        role: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        lastLoginAt: true,
+      },
+    });
+  }
+
   async create(createUserDto: CreateUserDto): Promise<User> {
-    if (!createUserDto.email && !createUserDto.phone) {
-      throw new ConflictException('Either email or phone must be provided');
+    let email = createUserDto.email;
+    let phone = createUserDto.phone;
+
+    if (createUserDto.identifier) {
+      if (createUserDto.identifier.includes('@')) {
+        email = email || createUserDto.identifier;
+      } else {
+        phone = phone || createUserDto.identifier;
+      }
     }
 
-    if (createUserDto.email) {
+    if (!email && !phone) {
+      throw new ConflictException(
+        'Either email, phone, or identifier must be provided',
+      );
+    }
+
+    if (email) {
       const existingEmail = await this.usersRepository.findOne({
-        where: { email: createUserDto.email },
+        where: { email },
       });
       if (existingEmail) {
         throw new ConflictException(
-          `User with email "${createUserDto.email}" already exists`,
+          `User with email "${email}" already exists`,
         );
       }
     }
 
-    if (createUserDto.phone) {
+    if (phone) {
       const existingPhone = await this.usersRepository.findOne({
-        where: { phone: createUserDto.phone },
+        where: { phone },
       });
       if (existingPhone) {
         throw new ConflictException(
-          `User with phone "${createUserDto.phone}" already exists`,
+          `User with phone "${phone}" already exists`,
         );
       }
     }
 
     const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { identifier, ...userData } = createUserDto;
     const user = this.usersRepository.create({
-      ...createUserDto,
+      ...userData,
+      email,
+      phone,
       password: hashedPassword,
     });
     const saved = await this.usersRepository.save(user);
@@ -89,34 +125,49 @@ export class UsersService {
   async update(id: string, updateUserDto: UpdateUserDto): Promise<User> {
     const user = await this.findOne(id);
 
-    if (updateUserDto.email && updateUserDto.email !== user.email) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { identifier, ...updateData } = updateUserDto;
+    let email = updateData.email;
+    let phone = updateData.phone;
+    if (identifier) {
+      if (identifier.includes('@')) {
+        email = email || identifier;
+      } else {
+        phone = phone || identifier;
+      }
+    }
+
+    if (email && email !== user.email) {
       const existing = await this.usersRepository.findOne({
-        where: { email: updateUserDto.email },
+        where: { email },
       });
       if (existing) {
         throw new ConflictException(
-          `User with email "${updateUserDto.email}" already exists`,
+          `User with email "${email}" already exists`,
         );
       }
     }
 
-    const phoneUpdate = (updateUserDto as { phone?: string }).phone;
-    if (phoneUpdate && phoneUpdate !== user.phone) {
+    if (phone && phone !== user.phone) {
       const existingPhone = await this.usersRepository.findOne({
-        where: { phone: phoneUpdate },
+        where: { phone },
       });
       if (existingPhone) {
         throw new ConflictException(
-          `User with phone "${phoneUpdate}" already exists`,
+          `User with phone "${phone}" already exists`,
         );
       }
     }
 
-    if (updateUserDto.password) {
-      updateUserDto.password = await bcrypt.hash(updateUserDto.password, 10);
+    if (updateData.password) {
+      updateData.password = await bcrypt.hash(updateData.password, 10);
     }
 
-    Object.assign(user, updateUserDto);
+    Object.assign(user, {
+      ...updateData,
+      ...(email !== undefined ? { email } : {}),
+      ...(phone !== undefined ? { phone } : {}),
+    });
     return this.usersRepository.save(user);
   }
 

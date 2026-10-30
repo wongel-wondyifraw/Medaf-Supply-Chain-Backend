@@ -11,6 +11,7 @@ import {
   Request,
   UseInterceptors,
   UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { OrdersService } from './orders.service.js';
@@ -77,7 +78,22 @@ export class OrdersController {
 
   @Post(':id/items')
   @RequirePermissions('orders.items.add')
-  @UseInterceptors(FileInterceptor('image'))
+  @UseInterceptors(
+    FileInterceptor('image', {
+      limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+      fileFilter: (req, file, callback) => {
+        if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|webp)$/i)) {
+          return callback(
+            new BadRequestException(
+              'Only image files (jpg, jpeg, png, gif, webp) are allowed',
+            ),
+            false,
+          );
+        }
+        callback(null, true);
+      },
+    }),
+  )
   addItem(
     @Param('id') id: string,
     @Body() createOrderItemDto: CreateOrderItemDto,

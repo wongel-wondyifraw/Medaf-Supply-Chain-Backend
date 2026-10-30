@@ -11,7 +11,7 @@ import { CreateOrderDto } from './dto/create-order.dto.js';
 import { CreateOrderItemDto } from './dto/create-order-item.dto.js';
 import { ConfirmItemDto } from './dto/confirm-item.dto.js';
 import { UsersService } from '../users/users.service.js';
-import { CloudinaryService } from '../cloudinary/cloudinary.service.js';
+import { StorageService } from '../storage/storage.service.js';
 
 @Injectable()
 export class OrdersService {
@@ -21,7 +21,7 @@ export class OrdersService {
     @InjectRepository(OrderItem)
     private readonly orderItemsRepository: Repository<OrderItem>,
     private readonly usersService: UsersService,
-    private readonly cloudinaryService: CloudinaryService,
+    private readonly storageService: StorageService,
   ) {}
 
   private async generateOrderId(): Promise<string> {
@@ -203,10 +203,11 @@ export class OrdersService {
 
     let imageUrl = createOrderItemDto.imageUrl;
     if (file) {
-      const uploadResult = (await this.cloudinaryService.uploadImage(file)) as {
-        secure_url: string;
-      };
-      imageUrl = uploadResult.secure_url;
+      const uploadResult = await this.storageService.saveOrderImage(
+        order.orderId || order.id,
+        file,
+      );
+      imageUrl = uploadResult.url;
     }
 
     const item = this.orderItemsRepository.create({
@@ -232,6 +233,10 @@ export class OrdersService {
       throw new NotFoundException(
         `Item with ID "${itemId}" not found in order`,
       );
+    }
+
+    if (item.imageUrl) {
+      await this.storageService.deleteFile(item.imageUrl);
     }
 
     await this.orderItemsRepository.remove(item);

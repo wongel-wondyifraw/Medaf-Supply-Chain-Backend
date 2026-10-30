@@ -14,6 +14,14 @@ export class UpdateUserDto {
   email?: string;
 
   @IsString()
+  @IsOptional()
+  phone?: string;
+
+  @IsString()
+  @IsOptional()
+  identifier?: string;
+
+  @IsString()
   @MinLength(6)
   @IsOptional()
   password?: string;
