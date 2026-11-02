@@ -1,6 +1,7 @@
 import {
   Entity,
-  PrimaryGeneratedColumn,
+  PrimaryColumn,
+  BeforeInsert,
   Column,
   CreateDateColumn,
   UpdateDateColumn,
@@ -8,13 +9,21 @@ import {
   OneToMany,
   JoinColumn,
 } from 'typeorm';
+import { randomUUID } from 'crypto';
 import { User } from '../../users/entities/user.entity.js';
 import { OrderItem } from './order-item.entity.js';
 
 @Entity('orders')
 export class Order {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryColumn('uuid')
+  id: string = randomUUID();
+
+  @BeforeInsert()
+  generateId() {
+    if (!this.id) {
+      this.id = randomUUID();
+    }
+  }
 
   @Column({ name: 'order_id', unique: true })
   orderId: string; // ORD-XXXX format

@@ -1,18 +1,27 @@
 import {
   Entity,
-  PrimaryGeneratedColumn,
+  PrimaryColumn,
+  BeforeInsert,
   Column,
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
+import { randomUUID } from 'crypto';
 import { Order } from './order.entity.js';
 
 @Entity('order_items')
 export class OrderItem {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryColumn('uuid')
+  id: string = randomUUID();
+
+  @BeforeInsert()
+  generateId() {
+    if (!this.id) {
+      this.id = randomUUID();
+    }
+  }
 
   @Column({ name: 'order_id', nullable: true })
   orderId: string | null;

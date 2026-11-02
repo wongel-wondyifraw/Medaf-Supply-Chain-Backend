@@ -1,14 +1,23 @@
 import {
   Entity,
-  PrimaryGeneratedColumn,
+  PrimaryColumn,
+  BeforeInsert,
   Column,
   CreateDateColumn,
 } from 'typeorm';
+import { randomUUID } from 'crypto';
 
 @Entity('invitations')
 export class Invitation {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @PrimaryColumn('uuid')
+  id: string = randomUUID();
+
+  @BeforeInsert()
+  generateId() {
+    if (!this.id) {
+      this.id = randomUUID();
+    }
+  }
 
   @Column({ unique: true })
   token: string;
