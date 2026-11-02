@@ -21,20 +21,24 @@ export class SeedService implements OnModuleInit {
   }
 
   private async seedRoles() {
-    const catalogPath = path.join(
-      process.cwd(),
-      'src',
-      'permissions',
-      'permissions-catalog.json',
-    );
+    const candidatePaths = [
+      path.join(process.cwd(), 'dist', 'permissions', 'permissions-catalog.json'),
+      path.join(process.cwd(), 'src', 'permissions', 'permissions-catalog.json'),
+      path.join(__dirname, '..', 'permissions', 'permissions-catalog.json'),
+    ];
     let allPermissions: string[] = [];
-    try {
-      const catalogData = JSON.parse(fs.readFileSync(catalogPath, 'utf8')) as {
-        permissions: Array<{ key: string; label: string; group: string }>;
-      };
-      allPermissions = catalogData.permissions.map((p) => p.key);
-    } catch (e) {
-      this.logger.error('Failed to load permissions catalog', e);
+    for (const p of candidatePaths) {
+      if (fs.existsSync(p)) {
+        try {
+          const catalogData = JSON.parse(fs.readFileSync(p, 'utf8')) as {
+            permissions: Array<{ key: string; label: string; group: string }>;
+          };
+          allPermissions = catalogData.permissions.map((item) => item.key);
+          break;
+        } catch (e) {
+          this.logger.error(`Failed to parse permissions catalog at ${p}`, e);
+        }
+      }
     }
 
     const defaultRoles = [

@@ -9,6 +9,11 @@ import { AuthModule } from './auth/auth.module.js';
 import { InvitationsModule } from './invitations/invitations.module.js';
 import { SeedModule } from './seed/seed.module.js';
 import { OrdersModule } from './orders/orders.module.js';
+import { User } from './users/entities/user.entity.js';
+import { Role } from './roles/entities/role.entity.js';
+import { Invitation } from './invitations/entities/invitation.entity.js';
+import { Order } from './orders/entities/order.entity.js';
+import { OrderItem } from './orders/entities/order-item.entity.js';
 
 @Module({
   imports: [
@@ -18,7 +23,11 @@ import { OrdersModule } from './orders/orders.module.js';
       useFactory: (configService: ConfigService) => {
         const isLocal = configService.get<string>('LOCAL') === 'true';
         const databaseUrl = configService.get<string>('DATABASE_URL');
-        const dbHost = configService.get<string>('DB_HOST', 'localhost');
+        let dbHost = configService.get<string>('DB_HOST', 'localhost');
+        if (dbHost === 'localhost') {
+          // On Linux / cPanel, 127.0.0.1 prevents IPv6 (::1) ECONNREFUSED
+          dbHost = '127.0.0.1';
+        }
         const dbPort = Number(configService.get<number>('DB_PORT', 5432));
         const dbUsername = configService.get<string>('DB_USERNAME', 'postgres');
         const dbPassword = configService.get<string>('DB_PASSWORD', '');
@@ -65,6 +74,7 @@ import { OrdersModule } from './orders/orders.module.js';
         return {
           type: 'postgres' as const,
           ...connectionConfig,
+          entities: [User, Role, Invitation, Order, OrderItem],
           autoLoadEntities: true,
           synchronize:
             configService.get<string>('DB_SYNCHRONIZE', 'true') === 'true',
