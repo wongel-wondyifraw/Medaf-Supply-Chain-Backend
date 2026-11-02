@@ -17,27 +17,57 @@ import { OrdersModule } from './orders/orders.module.js';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
         const isLocal = configService.get<string>('LOCAL') === 'true';
+        const databaseUrl = configService.get<string>('DATABASE_URL');
+        const dbHost = configService.get<string>('DB_HOST', 'localhost');
+        const dbPort = Number(configService.get<number>('DB_PORT', 5432));
+        const dbUsername = configService.get<string>('DB_USERNAME', 'postgres');
+        const dbPassword = configService.get<string>('DB_PASSWORD', '');
+        const dbName = configService.get<string>('DB_NAME', 'medaf_supply_chain');
+        const dbSsl = configService.get<string>('DB_SSL');
+
+        // Determine SSL mode:
+        // - Explicit DB_SSL takes precedence ('true' or 'false')
+        // - Otherwise: enable SSL if DATABASE_URL specifies require or for remote non-local hosts
+        // - Default to false for cPanel localhost / 127.0.0.1
+        let sslConfig: boolean | { rejectUnauthorized: boolean } = false;
+        if (dbSsl === 'true') {
+          sslConfig = { rejectUnauthorized: false };
+        } else if (dbSsl === 'false') {
+          sslConfig = false;
+        } else if (
+          databaseUrl &&
+          (databaseUrl.includes('sslmode=require') ||
+            (!isLocal && !databaseUrl.includes('localhost') && !databaseUrl.includes('127.0.0.1')))
+        ) {
+          sslConfig = { rejectUnauthorized: false };
+        } else if (!isLocal && dbHost !== 'localhost' && dbHost !== '127.0.0.1') {
+          sslConfig = { rejectUnauthorized: false };
+        }
+
+        // In local development, prioritize explicit DB_HOST / DB_PASSWORD credentials.
+        // In production / cPanel, use DATABASE_URL if present, otherwise fallback to DB_HOST / DB_PASSWORD.
+        const useDatabaseUrl = !isLocal && !!databaseUrl;
+
+        const connectionConfig = useDatabaseUrl
+          ? {
+              url: databaseUrl,
+              ssl: sslConfig,
+            }
+          : {
+              host: dbHost,
+              port: dbPort,
+              username: dbUsername,
+              password: dbPassword,
+              database: dbName,
+              ssl: sslConfig,
+            };
 
         return {
           type: 'postgres' as const,
-          ...(isLocal
-            ? {
-                host: configService.get<string>('DB_HOST', 'localhost'),
-                port: configService.get<number>('DB_PORT', 5432),
-                username: configService.get<string>('DB_USERNAME', 'postgres'),
-                password: configService.get<string>('DB_PASSWORD', ''),
-                database: configService.get<string>(
-                  'DB_NAME',
-                  'medaf_supply_chain',
-                ),
-                ssl: false,
-              }
-            : {
-                url: configService.get<string>('DATABASE_URL'),
-                ssl: { rejectUnauthorized: false },
-              }),
+          ...connectionConfig,
           autoLoadEntities: true,
-          synchronize: true, // Auto-create tables (dev only)
+          synchronize:
+            configService.get<string>('DB_SYNCHRONIZE', 'true') === 'true',
         };
       },
       inject: [ConfigService],

@@ -10,13 +10,27 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
 
   const isLocal = configService.get<string>('LOCAL') === 'true';
-  const frontendUrl = isLocal
-    ? configService.get<string>('FRONTEND_URL_LOCAL')
-    : configService.get<string>('FRONTEND_URL_PRODUCTION');
+  const configuredOrigins =
+    configService.get<string>('FRONTEND_URL') ||
+    (isLocal
+      ? configService.get<string>('FRONTEND_URL_LOCAL')
+      : configService.get<string>('FRONTEND_URL_PRODUCTION'));
+
+  // Support multiple comma-separated origins or default
+  let corsOrigin: boolean | string | string[] = true;
+  if (configuredOrigins && configuredOrigins !== '*') {
+    const origins = configuredOrigins
+      .split(',')
+      .map((url) => url.trim().replace(/\/$/, ''))
+      .filter(Boolean);
+    corsOrigin = origins.length === 1 ? origins[0] : origins;
+  } else if (!configuredOrigins) {
+    corsOrigin = ['http://localhost:3000'];
+  }
 
   // Enable CORS for frontend
   app.enableCors({
-    origin: [frontendUrl || 'http://localhost:3000'],
+    origin: corsOrigin,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     credentials: true,
   });

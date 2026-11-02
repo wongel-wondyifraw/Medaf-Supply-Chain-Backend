@@ -42,18 +42,25 @@ export class InvitationsService {
 
     // Construct the link using environment variables
     const isLocal = this.configService.get<string>('LOCAL') === 'true';
-    const frontendUrl = isLocal
-      ? this.configService.get<string>(
-          'FRONTEND_URL_LOCAL',
-          'http://localhost:3000',
-        )
-      : this.configService.get<string>(
-          'FRONTEND_URL_PRODUCTION',
-          'https://medaf-supply-chain.vercel.app',
-        );
+    const frontendConfig =
+      this.configService.get<string>('FRONTEND_URL') ||
+      (isLocal
+        ? this.configService.get<string>(
+            'FRONTEND_URL_LOCAL',
+            'http://localhost:3000',
+          )
+        : this.configService.get<string>(
+            'FRONTEND_URL_PRODUCTION',
+            'https://medaf-supply-chain.vercel.app',
+          ));
+    const primaryFrontendUrl = frontendConfig
+      .split(',')[0]
+      .trim()
+      .replace(/\/$/, '');
+
     return {
       token,
-      link: `${frontendUrl}/invite/${token}`,
+      link: `${primaryFrontendUrl}/invite/${token}`,
     };
   }
 
