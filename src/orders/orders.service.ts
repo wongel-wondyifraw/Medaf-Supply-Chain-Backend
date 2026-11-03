@@ -10,6 +10,7 @@ import { OrderItem } from './entities/order-item.entity.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
 import { CreateOrderItemDto } from './dto/create-order-item.dto.js';
 import { ConfirmItemDto } from './dto/confirm-item.dto.js';
+import { UpdateInventoryItemDto } from './dto/update-inventory-item.dto.js';
 import { UsersService } from '../users/users.service.js';
 import { StorageService } from '../storage/storage.service.js';
 
@@ -197,13 +198,107 @@ export class OrdersService {
     });
   }
 
+  async getInventoryItem(id: string): Promise<OrderItem> {
+    const item = await this.orderItemsRepository.findOne({
+      where: { id, confirmedByStoreKeeper: true },
+      relations: {
+        order: { storeKeeper: true, merchant: true, receiver: true },
+      },
+    });
+    if (!item) {
+      throw new NotFoundException(`Inventory item with ID "${id}" not found`);
+    }
+    return item;
+  }
+
+  async updateInventoryItem(
+    id: string,
+    updateDto: UpdateInventoryItemDto,
+    file?: Express.Multer.File,
+    userRole?: string,
+  ): Promise<OrderItem> {
+    if (
+      userRole !== 'Admin' &&
+      userRole !== 'Store Keeper' &&
+      userRole !== 'Manager'
+    ) {
+      throw new BadRequestException('Unauthorized to update inventory items');
+    }
+
+    const item = await this.orderItemsRepository.findOne({
+      where: { id, confirmedByStoreKeeper: true },
+      relations: { order: true },
+    });
+    if (!item) {
+      throw new NotFoundException(`Inventory item with ID "${id}" not found`);
+    }
+
+    if (updateDto.name !== undefined) {
+      item.name = updateDto.name.trim();
+    }
+    if (updateDto.quantity !== undefined) {
+      const qty = Number(updateDto.quantity);
+      if (isNaN(qty) || qty < 0) {
+        throw new BadRequestException('Quantity must be a non-negative number');
+      }
+      item.quantity = qty;
+    }
+    if (updateDto.cost !== undefined) {
+      const cost = Number(updateDto.cost);
+      if (isNaN(cost) || cost < 0) {
+        throw new BadRequestException('Cost must be a non-negative number');
+      }
+      item.cost = cost;
+    }
+
+    if (file) {
+      const oldImageUrl = item.imageUrl;
+      const orderIdentifier =
+        item.order?.orderId || item.orderId || 'inventory';
+      const uploadResult = await this.storageService.saveOrderImage(
+        orderIdentifier,
+        file,
+      );
+      item.imageUrl = uploadResult.url;
+
+      if (oldImageUrl) {
+        await this.storageService.deleteFile(oldImageUrl);
+      }
+    }
+
+    return this.orderItemsRepository.save(item);
+  }
+
+  async removeInventoryItem(id: string, userRole?: string): Promise<void> {
+    if (
+      userRole !== 'Admin' &&
+      userRole !== 'Store Keeper' &&
+      userRole !== 'Manager'
+    ) {
+      throw new BadRequestException('Unauthorized to delete inventory items');
+    }
+
+    const item = await this.orderItemsRepository.findOne({
+      where: { id, confirmedByStoreKeeper: true },
+    });
+    if (!item) {
+      throw new NotFoundException(`Inventory item with ID "${id}" not found`);
+    }
+
+    if (item.imageUrl) {
+      await this.storageService.deleteFile(item.imageUrl);
+    }
+
+    await this.orderItemsRepository.remove(item);
+  }
+
   async getDashboardStats() {
     try {
       const statsRes = await this.dataSource.query(`
         SELECT
           (SELECT COUNT(*) FROM orders) as "allOrders",
           (SELECT COUNT(*) FROM orders WHERE status = 'pending') as "pendingOrders",
-          (SELECT COUNT(*) FROM orders WHERE status IN ('in_progress', 'closed')) as "confirmedOrders",
+          (SELECT COUNT(*) FROM orders WHERE status IN ('in_progress', 'done', 'closed')) as "confirmedOrders",
           (SELECT COUNT(*) FROM order_items WHERE confirmed_by_store_keeper = true) as "inventoryItems"
       `);
       const row = statsRes[0] || {};
@@ -233,7 +328,11 @@ export class OrdersService {
         where: { status: 'pending' },
       });
       const confirmedOrdersCount = await this.ordersRepository.count({
-        where: [{ status: 'in_progress' }, { status: 'closed' }],
+        where: [
+          { status: 'in_progress' },
+          { status: 'done' },
+          { status: 'closed' },
+        ],
       });
       const inventoryItemsCount = await this.orderItemsRepository.count({
         where: { confirmedByStoreKeeper: true },
@@ -423,13 +522,42 @@ export class OrdersService {
         item.stage = 'store_keeper'; // Final stage
       }
 
-      // Update order status if items are confirmed
-      if (order.status === 'pending') {
-        order.status = 'in_progress';
+      await itemRepo.save(item);
+
+      // Check all items belonging to this order to evaluate 100% completion
+      const allItems = await itemRepo.find({ where: { orderId: order.id } });
+      const is100PercentApproved =
+        allItems.length > 0 &&
+        allItems.every(
+          (i) =>
+            i.confirmedByMerchant &&
+            i.confirmedByReceiver &&
+            i.confirmedByStoreKeeper,
+        );
+
+      if (is100PercentApproved) {
+        order.status = 'done';
+        order.currentStep = 3;
+        order.closedAt = new Date();
+        await orderRepo.save(order);
+      } else {
+        const anyReceiverPending = allItems.some((i) => !i.confirmedByReceiver);
+        const anyMerchantPending = allItems.some((i) => !i.confirmedByMerchant);
+        if (anyMerchantPending) {
+          order.currentStep = 1;
+        } else if (anyReceiverPending) {
+          order.currentStep = 2;
+        } else {
+          order.currentStep = 3;
+        }
+
+        if (order.status === 'pending') {
+          order.status = 'in_progress';
+        }
         await orderRepo.save(order);
       }
 
-      return itemRepo.save(item);
+      return item;
     });
   }
 

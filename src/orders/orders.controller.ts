@@ -19,6 +19,7 @@ import { OrdersService } from './orders.service.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
 import { CreateOrderItemDto } from './dto/create-order-item.dto.js';
 import { ConfirmItemDto } from './dto/confirm-item.dto.js';
+import { UpdateInventoryItemDto } from './dto/update-inventory-item.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { PermissionsGuard } from '../auth/guards/permissions.guard.js';
 import { RequirePermissions } from '../auth/decorators/require-permissions.decorator.js';
@@ -63,6 +64,53 @@ export class OrdersController {
   @RequirePermissions('inventory.view')
   getInventory() {
     return this.ordersService.getInventoryItems();
+  }
+
+  @Get('inventory/items/:id')
+  @RequirePermissions('inventory.view')
+  getInventoryItem(@Param('id') id: string) {
+    return this.ordersService.getInventoryItem(id);
+  }
+
+  @Patch('inventory/items/:id')
+  @RequirePermissions('inventory.view')
+  @UseInterceptors(
+    FileInterceptor('image', {
+      limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+      fileFilter: (req, file, callback) => {
+        if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|webp)$/i)) {
+          return callback(
+            new BadRequestException(
+              'Only image files (jpg, jpeg, png, gif, webp) are allowed',
+            ),
+            false,
+          );
+        }
+        callback(null, true);
+      },
+    }),
+  )
+  updateInventoryItem(
+    @Param('id') id: string,
+    @Body() updateDto: UpdateInventoryItemDto,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.ordersService.updateInventoryItem(
+      id,
+      updateDto,
+      file,
+      req.user.role,
+    );
+  }
+
+  @Delete('inventory/items/:id')
+  @RequirePermissions('inventory.view')
+  removeInventoryItem(
+    @Param('id') id: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.ordersService.removeInventoryItem(id, req.user.role);
   }
 
   @Get('dashboard/stats')
