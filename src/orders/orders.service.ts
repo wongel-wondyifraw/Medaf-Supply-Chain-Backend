@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like, FindOptionsWhere } from 'typeorm';
+import { Repository, DataSource, EntityManager } from 'typeorm';
 import { Order } from './entities/order.entity.js';
 import { OrderItem } from './entities/order-item.entity.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
@@ -22,12 +22,36 @@ export class OrdersService {
     private readonly orderItemsRepository: Repository<OrderItem>,
     private readonly usersService: UsersService,
     private readonly storageService: StorageService,
+    private readonly dataSource: DataSource,
   ) {}
 
-  private async generateOrderId(): Promise<string> {
-    const count = await this.ordersRepository.count();
-    const nextId = (count + 1).toString().padStart(4, '0');
-    return `ORD-${nextId}`;
+  private async generateOrderId(manager?: EntityManager): Promise<string> {
+    const runner = manager || this.dataSource;
+    try {
+      await runner.query(
+        'CREATE SEQUENCE IF NOT EXISTS order_id_seq START WITH 1',
+      );
+      const maxRes = await runner.query(`
+        SELECT COALESCE(MAX(CAST(SUBSTRING(order_id FROM 5) AS INTEGER)), 0) as max_id 
+        FROM orders 
+        WHERE order_id ~ '^ORD-[0-9]+$'
+      `);
+      const maxId = Number(maxRes[0]?.max_id || 0);
+      if (maxId > 0) {
+        await runner.query(
+          `SELECT setval('order_id_seq', GREATEST(nextval('order_id_seq'), ${maxId}))`,
+        );
+      }
+      const seqRes = await runner.query(
+        "SELECT nextval('order_id_seq') as next_id",
+      );
+      const nextId = String(seqRes[0].next_id).padStart(4, '0');
+      return `ORD-${nextId}`;
+    } catch {
+      const count = await this.ordersRepository.count();
+      const randomPart = Math.floor(1000 + Math.random() * 9000);
+      return `ORD-${(count + 1).toString().padStart(4, '0')}-${randomPart}`;
+    }
   }
 
   async create(
@@ -49,19 +73,48 @@ export class OrdersService {
     if (storeKeeper.role !== 'Store Keeper' && storeKeeper.role !== 'Admin')
       throw new BadRequestException('Invalid Store Keeper');
 
-    const orderId = await this.generateOrderId();
+    return this.dataSource.transaction(async (manager) => {
+      const orderId = await this.generateOrderId(manager);
 
-    const order = this.ordersRepository.create({
-      orderId,
-      merchantId: createOrderDto.merchantId,
-      receiverId: createOrderDto.receiverId,
-      storeKeeperId: createOrderDto.storeKeeperId,
-      createdBy: createdByUserId,
-      status: 'pending',
-      currentStep: 1,
+      const orderEntity = manager.create(Order, {
+        orderId,
+        merchantId: createOrderDto.merchantId,
+        receiverId: createOrderDto.receiverId,
+        storeKeeperId: createOrderDto.storeKeeperId,
+        createdBy: createdByUserId,
+        status: 'pending',
+        currentStep: 1,
+      });
+
+      const savedOrder = await manager.save(Order, orderEntity);
+
+      if (createOrderDto.items && createOrderDto.items.length > 0) {
+        const itemEntities = createOrderDto.items.map((item) =>
+          manager.create(OrderItem, {
+            name: item.name,
+            cost: item.cost,
+            quantity: item.quantity || 1,
+            imageUrl: item.imageUrl,
+            orderId: savedOrder.id,
+            stage: 'merchant',
+          }),
+        );
+        savedOrder.items = await manager.save(OrderItem, itemEntities);
+      } else {
+        savedOrder.items = [];
+      }
+
+      return (await manager.findOne(Order, {
+        where: { id: savedOrder.id },
+        relations: {
+          merchant: true,
+          receiver: true,
+          storeKeeper: true,
+          creator: true,
+          items: true,
+        },
+      })) as Order;
     });
-
-    return this.ordersRepository.save(order);
   }
 
   async findAll(
@@ -69,35 +122,71 @@ export class OrdersService {
     status?: string,
     userId?: string,
     userRole?: string,
-  ): Promise<Order[]> {
-    const where: FindOptionsWhere<Order> = {};
+    page?: number,
+    limit?: number,
+  ): Promise<
+    | Order[]
+    | {
+        data: Order[];
+        meta: {
+          total: number;
+          page: number;
+          limit: number;
+          totalPages: number;
+        };
+      }
+  > {
+    const qb = this.ordersRepository
+      .createQueryBuilder('order')
+      .leftJoinAndSelect('order.merchant', 'merchant')
+      .leftJoinAndSelect('order.receiver', 'receiver')
+      .leftJoinAndSelect('order.storeKeeper', 'storeKeeper')
+      .leftJoinAndSelect('order.creator', 'creator')
+      .leftJoinAndSelect('order.items', 'items');
 
     if (search) {
-      where.orderId = Like(`%${search}%`);
+      qb.andWhere('order.orderId ILIKE :search', { search: `%${search}%` });
     }
-    if (status) {
-      where.status = status;
+    if (status && status !== 'all') {
+      qb.andWhere('order.status = :status', { status });
     }
 
     if (userRole === 'Merchant') {
-      where.merchantId = userId;
+      qb.andWhere(
+        '(order.merchantId = :userId OR order.createdBy = :userId)',
+        { userId },
+      );
     } else if (userRole === 'Receiver') {
-      where.receiverId = userId;
+      qb.andWhere(
+        '(order.receiverId = :userId OR order.createdBy = :userId)',
+        { userId },
+      );
     } else if (userRole === 'Store Keeper') {
-      where.storeKeeperId = userId;
+      qb.andWhere(
+        '(order.storeKeeperId = :userId OR order.createdBy = :userId)',
+        { userId },
+      );
     }
 
-    return this.ordersRepository.find({
-      where,
-      relations: {
-        merchant: true,
-        receiver: true,
-        storeKeeper: true,
-        creator: true,
-        items: true,
-      },
-      order: { createdAt: 'DESC' },
-    });
+    qb.orderBy('order.createdAt', 'DESC');
+
+    if (page && limit) {
+      const pageNum = Math.max(1, Number(page));
+      const limitNum = Math.max(1, Number(limit));
+      qb.skip((pageNum - 1) * limitNum).take(limitNum);
+      const [data, total] = await qb.getManyAndCount();
+      return {
+        data,
+        meta: {
+          total,
+          page: pageNum,
+          limit: limitNum,
+          totalPages: Math.ceil(total / limitNum),
+        },
+      };
+    }
+
+    return qb.getMany();
   }
 
   async getInventoryItems(): Promise<OrderItem[]> {
@@ -109,41 +198,67 @@ export class OrdersService {
   }
 
   async getDashboardStats() {
-    const allOrdersCount = await this.ordersRepository.count();
+    try {
+      const statsRes = await this.dataSource.query(`
+        SELECT
+          (SELECT COUNT(*) FROM orders) as "allOrders",
+          (SELECT COUNT(*) FROM orders WHERE status = 'pending') as "pendingOrders",
+          (SELECT COUNT(*) FROM orders WHERE status IN ('in_progress', 'closed')) as "confirmedOrders",
+          (SELECT COUNT(*) FROM order_items WHERE confirmed_by_store_keeper = true) as "inventoryItems"
+      `);
+      const row = statsRes[0] || {};
+      const stats = {
+        allOrders: Number(row.allOrders || 0),
+        pendingOrders: Number(row.pendingOrders || 0),
+        confirmedOrders: Number(row.confirmedOrders || 0),
+        inventoryItems: Number(row.inventoryItems || 0),
+      };
 
-    const pendingOrdersCount = await this.ordersRepository.count({
-      where: { status: 'pending' },
-    });
+      const recentOrders = await this.ordersRepository.find({
+        relations: {
+          merchant: true,
+          receiver: true,
+          storeKeeper: true,
+          creator: true,
+          items: true,
+        },
+        order: { createdAt: 'DESC' },
+        take: 5,
+      });
 
-    const confirmedOrdersCount = await this.ordersRepository.count({
-      where: [{ status: 'in_progress' }, { status: 'closed' }],
-    });
-
-    const inventoryItemsCount = await this.orderItemsRepository.count({
-      where: { confirmedByStoreKeeper: true },
-    });
-
-    const recentOrders = await this.ordersRepository.find({
-      relations: {
-        merchant: true,
-        receiver: true,
-        storeKeeper: true,
-        creator: true,
-        items: true,
-      },
-      order: { createdAt: 'DESC' },
-      take: 5,
-    });
-
-    return {
-      stats: {
-        allOrders: allOrdersCount,
-        pendingOrders: pendingOrdersCount,
-        confirmedOrders: confirmedOrdersCount,
-        inventoryItems: inventoryItemsCount,
-      },
-      recentOrders,
-    };
+      return { stats, recentOrders };
+    } catch {
+      const allOrdersCount = await this.ordersRepository.count();
+      const pendingOrdersCount = await this.ordersRepository.count({
+        where: { status: 'pending' },
+      });
+      const confirmedOrdersCount = await this.ordersRepository.count({
+        where: [{ status: 'in_progress' }, { status: 'closed' }],
+      });
+      const inventoryItemsCount = await this.orderItemsRepository.count({
+        where: { confirmedByStoreKeeper: true },
+      });
+      const recentOrders = await this.ordersRepository.find({
+        relations: {
+          merchant: true,
+          receiver: true,
+          storeKeeper: true,
+          creator: true,
+          items: true,
+        },
+        order: { createdAt: 'DESC' },
+        take: 5,
+      });
+      return {
+        stats: {
+          allOrders: allOrdersCount,
+          pendingOrders: pendingOrdersCount,
+          confirmedOrders: confirmedOrdersCount,
+          inventoryItems: inventoryItemsCount,
+        },
+        recentOrders,
+      };
+    }
   }
 
   async getMyApprovals(userId: string, userRole: string): Promise<OrderItem[]> {
@@ -202,22 +317,30 @@ export class OrdersService {
     }
 
     let imageUrl = createOrderItemDto.imageUrl;
+    let uploadResult: { url: string; relativePath: string } | undefined;
     if (file) {
-      const uploadResult = await this.storageService.saveOrderImage(
+      uploadResult = await this.storageService.saveOrderImage(
         order.orderId || order.id,
         file,
       );
       imageUrl = uploadResult.url;
     }
 
-    const item = this.orderItemsRepository.create({
-      ...createOrderItemDto,
-      imageUrl,
-      orderId: order.id,
-      stage: 'merchant',
-    });
+    try {
+      const item = this.orderItemsRepository.create({
+        ...createOrderItemDto,
+        imageUrl,
+        orderId: order.id,
+        stage: 'merchant',
+      });
 
-    return this.orderItemsRepository.save(item);
+      return await this.orderItemsRepository.save(item);
+    } catch (err) {
+      if (uploadResult?.url) {
+        await this.storageService.deleteFile(uploadResult.url);
+      }
+      throw err;
+    }
   }
 
   async removeItem(orderId: string, itemId: string): Promise<void> {
@@ -249,53 +372,61 @@ export class OrdersService {
     userId: string,
     userRole: string,
   ): Promise<OrderItem> {
-    const order = await this.findOne(orderId);
-    if (order.status === 'closed') {
-      throw new BadRequestException('Order is already closed');
-    }
+    return this.dataSource.transaction(async (manager) => {
+      const orderRepo = manager.getRepository(Order);
+      const itemRepo = manager.getRepository(OrderItem);
 
-    const item = await this.orderItemsRepository.findOne({
-      where: { id: itemId, orderId: order.id },
+      const order = await orderRepo.findOne({ where: { id: orderId } });
+      if (!order) {
+        throw new NotFoundException(`Order with ID "${orderId}" not found`);
+      }
+      if (order.status === 'closed') {
+        throw new BadRequestException('Order is already closed');
+      }
+
+      const item = await itemRepo.findOne({
+        where: { id: itemId, orderId: order.id },
+      });
+      if (!item) {
+        throw new NotFoundException(`Item with ID "${itemId}" not found`);
+      }
+
+      if (confirmItemDto.receivedQuantity !== undefined) {
+        item.receivedQuantity = confirmItemDto.receivedQuantity;
+      }
+
+      // Role-based confirmation logic
+      if (userRole === 'Merchant' || userRole === 'Admin') {
+        item.confirmedByMerchant = true;
+        if (item.stage === 'merchant') item.stage = 'delivery';
+      }
+      if (userRole === 'Receiver' || userRole === 'Admin') {
+        if (!item.confirmedByMerchant && userRole !== 'Admin') {
+          throw new BadRequestException(
+            'Item must be confirmed by Merchant first',
+          );
+        }
+        item.confirmedByReceiver = true;
+        if (item.stage === 'delivery') item.stage = 'store_keeper';
+      }
+      if (userRole === 'Store Keeper' || userRole === 'Admin') {
+        if (!item.confirmedByReceiver && userRole !== 'Admin') {
+          throw new BadRequestException(
+            'Item must be confirmed by Receiver first',
+          );
+        }
+        item.confirmedByStoreKeeper = true;
+        item.stage = 'store_keeper'; // Final stage
+      }
+
+      // Update order status if items are confirmed
+      if (order.status === 'pending') {
+        order.status = 'in_progress';
+        await orderRepo.save(order);
+      }
+
+      return itemRepo.save(item);
     });
-    if (!item) {
-      throw new NotFoundException(`Item with ID "${itemId}" not found`);
-    }
-
-    if (confirmItemDto.receivedQuantity !== undefined) {
-      item.receivedQuantity = confirmItemDto.receivedQuantity;
-    }
-
-    // Role-based confirmation logic
-    if (userRole === 'Merchant' || userRole === 'Admin') {
-      item.confirmedByMerchant = true;
-      if (item.stage === 'merchant') item.stage = 'delivery';
-    }
-    if (userRole === 'Receiver' || userRole === 'Admin') {
-      if (!item.confirmedByMerchant && userRole !== 'Admin') {
-        throw new BadRequestException(
-          'Item must be confirmed by Merchant first',
-        );
-      }
-      item.confirmedByReceiver = true;
-      if (item.stage === 'delivery') item.stage = 'store_keeper';
-    }
-    if (userRole === 'Store Keeper' || userRole === 'Admin') {
-      if (!item.confirmedByReceiver && userRole !== 'Admin') {
-        throw new BadRequestException(
-          'Item must be confirmed by Receiver first',
-        );
-      }
-      item.confirmedByStoreKeeper = true;
-      item.stage = 'store_keeper'; // Final stage
-    }
-
-    // Update order status if items are confirmed
-    if (order.status === 'pending') {
-      order.status = 'in_progress';
-      await this.ordersRepository.save(order);
-    }
-
-    return this.orderItemsRepository.save(item);
   }
 
   async closeOrder(orderId: string): Promise<OrderItem[]> {
@@ -329,31 +460,42 @@ export class OrdersService {
       throw new BadRequestException('Only Admins can delete orders');
     }
 
-    const order = await this.findOne(orderId);
+    return this.dataSource.transaction(async (manager) => {
+      const orderRepo = manager.getRepository(Order);
+      const itemRepo = manager.getRepository(OrderItem);
 
-    if (order.items && order.items.length > 0) {
-      // Only delete items that are not in the inventory (not fully confirmed)
-      const itemsToDelete = order.items.filter(
-        (item) => !item.confirmedByStoreKeeper,
-      );
-      if (itemsToDelete.length > 0) {
-        await this.orderItemsRepository.remove(itemsToDelete);
+      const order = await orderRepo.findOne({
+        where: { id: orderId },
+        relations: { items: true },
+      });
+      if (!order) {
+        throw new NotFoundException(`Order with ID "${orderId}" not found`);
       }
 
-      // Items that are fully confirmed stay in the inventory.
-      // Detach them from the order so they aren't affected by the order deletion.
-      const itemsToKeep = order.items.filter(
-        (item) => item.confirmedByStoreKeeper,
-      );
-      if (itemsToKeep.length > 0) {
-        for (const item of itemsToKeep) {
-          item.orderId = null;
+      if (order.items && order.items.length > 0) {
+        // Only delete items that are not in the inventory (not fully confirmed)
+        const itemsToDelete = order.items.filter(
+          (item) => !item.confirmedByStoreKeeper,
+        );
+        if (itemsToDelete.length > 0) {
+          await itemRepo.remove(itemsToDelete);
         }
-        await this.orderItemsRepository.save(itemsToKeep);
-      }
-    }
 
-    // Bypass TypeORM's in-memory cascade logic that might still delete preserved items
-    await this.ordersRepository.delete(order.id);
+        // Items that are fully confirmed stay in the inventory.
+        // Detach them from the order so they aren't affected by the order deletion.
+        const itemsToKeep = order.items.filter(
+          (item) => item.confirmedByStoreKeeper,
+        );
+        if (itemsToKeep.length > 0) {
+          for (const item of itemsToKeep) {
+            item.orderId = null;
+          }
+          await itemRepo.save(itemsToKeep);
+        }
+      }
+
+      // Bypass TypeORM's in-memory cascade logic that might still delete preserved items
+      await orderRepo.delete(order.id);
+    });
   }
 }

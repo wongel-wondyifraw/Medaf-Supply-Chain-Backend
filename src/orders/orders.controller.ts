@@ -43,12 +43,16 @@ export class OrdersController {
     @Request() req: AuthenticatedRequest,
     @Query('search') search?: string,
     @Query('status') status?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
   ) {
     return this.ordersService.findAll(
       search,
       status,
       req.user.id,
       req.user.role,
+      page ? Number(page) : undefined,
+      limit ? Number(limit) : undefined,
     );
   }
 

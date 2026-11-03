@@ -28,8 +28,16 @@ export class PermissionsGuard implements CanActivate {
       return false;
     }
 
-    // You could also extract permissions from the JWT token if they are added there,
-    // but fetching from DB ensures they are always up to date.
+    // Fast-path: Check permissions from validated JWT token directly
+    const tokenPermissions = (user as unknown as { permissions?: string[] })
+      ?.permissions;
+    if (tokenPermissions && tokenPermissions.length > 0) {
+      return requiredPermissions.every((permission) =>
+        tokenPermissions.includes(permission),
+      );
+    }
+
+    // Fallback: check database if permissions are missing from token
     try {
       const role = await this.rolesService.findByName(user.role);
       if (!role || !role.permissions) return false;

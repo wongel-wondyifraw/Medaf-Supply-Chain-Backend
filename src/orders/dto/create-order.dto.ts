@@ -1,4 +1,12 @@
-import { IsNotEmpty, IsUUID } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsUUID,
+  IsOptional,
+  IsArray,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+import { CreateOrderItemDto } from './create-order-item.dto.js';
 
 export class CreateOrderDto {
   @IsUUID()
@@ -12,4 +20,10 @@ export class CreateOrderDto {
   @IsUUID()
   @IsNotEmpty()
   storeKeeperId: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateOrderItemDto)
+  items?: CreateOrderItemDto[];
 }
