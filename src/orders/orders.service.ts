@@ -464,7 +464,9 @@ export class OrdersService {
       throw new BadRequestException('Only Admins can delete orders');
     }
 
-    return this.dataSource.transaction(async (manager) => {
+    let targetOrderIdentifier = orderId;
+
+    await this.dataSource.transaction(async (manager) => {
       const isUuid =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
           orderId,
@@ -476,6 +478,7 @@ export class OrdersService {
       if (!order) {
         throw new NotFoundException(`Order with ID "${orderId}" not found`);
       }
+      targetOrderIdentifier = order.orderId || order.id;
 
       // Detach fully confirmed items so they remain preserved in inventory
       await manager.query(
@@ -498,5 +501,8 @@ export class OrdersService {
       // Delete the order record directly
       await manager.query('DELETE FROM orders WHERE id = $1', [order.id]);
     });
+
+    // Delete order image uploads directory on disk if it exists
+    await this.storageService.deleteOrderFolder(targetOrderIdentifier);
   }
 }
