@@ -23,7 +23,7 @@ export class OrdersService {
     private readonly usersService: UsersService,
     private readonly storageService: StorageService,
     private readonly dataSource: DataSource,
-  ) {}
+  ) { }
 
   private async generateOrderId(manager?: EntityManager): Promise<string> {
     const runner = manager || this.dataSource;
@@ -127,14 +127,14 @@ export class OrdersService {
   ): Promise<
     | Order[]
     | {
-        data: Order[];
-        meta: {
-          total: number;
-          page: number;
-          limit: number;
-          totalPages: number;
-        };
-      }
+      data: Order[];
+      meta: {
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+      };
+    }
   > {
     const qb = this.ordersRepository
       .createQueryBuilder('order')
@@ -287,8 +287,12 @@ export class OrdersService {
   }
 
   async findOne(id: string): Promise<Order> {
+    const isUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        id,
+      );
     const order = await this.ordersRepository.findOne({
-      where: { id },
+      where: isUuid ? { id } : { orderId: id },
       relations: {
         merchant: true,
         receiver: true,
@@ -461,41 +465,38 @@ export class OrdersService {
     }
 
     return this.dataSource.transaction(async (manager) => {
+      const isUuid =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          orderId,
+        );
       const orderRepo = manager.getRepository(Order);
-      const itemRepo = manager.getRepository(OrderItem);
-
       const order = await orderRepo.findOne({
-        where: { id: orderId },
-        relations: { items: true },
+        where: isUuid ? { id: orderId } : { orderId },
       });
       if (!order) {
         throw new NotFoundException(`Order with ID "${orderId}" not found`);
       }
 
-      if (order.items && order.items.length > 0) {
-        // Only delete items that are not in the inventory (not fully confirmed)
-        const itemsToDelete = order.items.filter(
-          (item) => !item.confirmedByStoreKeeper,
-        );
-        if (itemsToDelete.length > 0) {
-          await itemRepo.remove(itemsToDelete);
-        }
+      // Detach fully confirmed items so they remain preserved in inventory
+      await manager.query(
+        'UPDATE order_items SET order_id = NULL WHERE order_id = $1 AND confirmed_by_store_keeper = true',
+        [order.id],
+      );
 
-        // Items that are fully confirmed stay in the inventory.
-        // Detach them from the order so they aren't affected by the order deletion.
-        const itemsToKeep = order.items.filter(
-          (item) => item.confirmedByStoreKeeper,
-        );
-        if (itemsToKeep.length > 0) {
-          for (const item of itemsToKeep) {
-            item.orderId = null;
-          }
-          await itemRepo.save(itemsToKeep);
-        }
-      }
+      // Delete unconfirmed / pending items associated with this order
+      await manager.query(
+        'DELETE FROM order_items WHERE order_id = $1 AND (confirmed_by_store_keeper IS NOT TRUE)',
+        [order.id],
+      );
 
-      // Bypass TypeORM's in-memory cascade logic that might still delete preserved items
-      await orderRepo.delete(order.id);
+      // Ensure any leftover item reference is cleared so FK constraint never fails
+      await manager.query(
+        'UPDATE order_items SET order_id = NULL WHERE order_id = $1',
+        [order.id],
+      );
+
+      // Delete the order record directly
+      await manager.query('DELETE FROM orders WHERE id = $1', [order.id]);
     });
   }
 }

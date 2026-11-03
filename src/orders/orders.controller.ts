@@ -12,6 +12,7 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  Header,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { OrdersService } from './orders.service.js';
@@ -39,6 +40,8 @@ export class OrdersController {
 
   @Get()
   @RequirePermissions('orders.view')
+  @Header('Cache-Control', 'no-cache, no-store, must-revalidate')
+  @Header('Pragma', 'no-cache')
   findAll(
     @Request() req: AuthenticatedRequest,
     @Query('search') search?: string,
